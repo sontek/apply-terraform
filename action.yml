@@ -1,0 +1,74 @@
+name: Apply Terraform
+description: Apply terraform tasks
+
+inputs:
+  terraform-token:
+    description: Token that allows execution of terraform runs on terraform enterprise
+    required: false
+  path:
+    description: Path to terraform folder
+    default: '.'
+    required: false
+
+runs:
+  using: composite
+
+  steps:
+    - uses: actions/checkout@v3
+
+    - uses: wistia/parse-tool-versions@v1.0
+      continue-on-error: true
+
+    - uses: hashicorp/setup-terraform@v2
+      with:
+        cli_config_credentials_token: ${{ inputs.terraform-token }}
+        terraform_version: ${{ env.TERRAFORM_TOOL_VERSION }}
+
+    - working-directory: ${{ inputs.path }}
+      shell: sh
+      id: init
+      run: terraform init
+
+    - name: Inform on PR that Apply is Running
+      uses: marocchino/sticky-pull-request-comment@v2
+      with:
+        header: "Terraform Apply: ${{ matrix.folder }}"
+        message: |
+          # Terraform Apply: ${{ matrix.folder }}
+          Results will display here momentarily...
+
+    - working-directory: ${{ matrix.folder }}
+      shell: sh
+      id: apply
+      run: terraform apply -auto-approve -input=false -no-color
+      continue-on-error: true
+
+    - name: Post Apply to GitHub PR
+      if: steps.apply.outcome == 'success'
+      uses: marocchino/sticky-pull-request-comment@v2
+      with:
+        header: "Terraform Apply: ${{ matrix.folder }}"
+        message: |
+          # ✅ Terraform: Applying Succeeded ${{ matrix.path }}
+
+          ```
+          ${{ steps.apply.outputs.stdout }}
+          ```
+
+    - name: Post Apply Failure
+      if: steps.apply.outcome == 'failure'
+      uses: marocchino/sticky-pull-request-comment@v2
+      with:
+        header: "Terraform Apply: ${{ matrix.folder }}"
+        message: |
+          # ❌ Terraform: Apply Failed: ${{ matrix.folder }}
+
+          ```
+          ${{ steps.apply.outputs.stdout }}
+          ${{ steps.apply.outputs.stderr }}
+          ```
+
+    - name: Exit if failure
+      shell: sh
+      if: steps.apply.outcome == 'failure' || steps.init.outcome == 'failure'
+      run: exit 1

@@ -1,0 +1,72 @@
+name: pr_apply
+
+on:
+  pull_request:
+    types: [ labeled ]
+
+jobs:
+  TerraformApply:
+    if: ${{ github.event.label.name == 'tfc-apply' }}
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+      pull-requests: write
+    strategy:
+      fail-fast: false
+      matrix:
+        folder:
+          - root
+    steps:
+      - uses: actions/checkout@v3
+      - uses: wistia/parse-tool-versions@v1.0
+      - uses: hashicorp/setup-terraform@v2
+        with:
+          cli_config_credentials_token: ${{ secrets.TFE_TOKEN }}
+          terraform_version: ${{ env.TERRAFORM_TOOL_VERSION }}
+
+      - working-directory: ${{ matrix.folder }}
+        id: init
+        run: terraform init
+
+      - name: Inform on PR that Apply is Running
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: "Terraform Apply: ${{ matrix.folder }}"
+          message: |
+            # Terraform Apply: ${{ matrix.folder }}
+            Results will display here momentarily...
+
+      - working-directory: ${{ matrix.folder }}
+        id: apply
+        run: terraform apply -auto-approve -input=false -no-color
+        continue-on-error: true
+
+      - name: Post Apply to GitHub PR
+        if: steps.apply.outcome == 'success'
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: "Terraform Apply: ${{ matrix.folder }}"
+          message: |
+            # ✅ Terraform: Applying Succeeded ${{ matrix.path }}
+
+            ```
+            ${{ steps.apply.outputs.stdout }}
+            ```
+
+      - name: Post Apply Failure
+        if: steps.apply.outcome == 'failure'
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: "Terraform Apply: ${{ matrix.folder }}"
+          message: |
+            # ❌ Terraform: Apply Failed: ${{ matrix.folder }}
+
+            ```
+            ${{ steps.apply.outputs.stdout }}
+            ${{ steps.apply.outputs.stderr }}
+            ```
+
+      - name: Exit if failure
+        shell: sh
+        if: steps.apply.outcome == 'failure' || steps.init.outcome == 'failure'
+        run: exit 1
