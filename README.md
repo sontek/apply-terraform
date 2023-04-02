@@ -1,5 +1,9 @@
 # apply-terraform
-Github action that applies terraform changes after they are planned
+Github action that applies terraform changes after they are planned.
+
+If you are looking for `terraform plan` check out:
+
+https://github.com/sontek/plan-terraform
 
 
 ## Usage
