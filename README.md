@@ -5,7 +5,6 @@ Github action that applies terraform changes after they are planned
 ## Usage
 To use it you can define an action that runs on pull requests:
 
-```yaml
 # plan-terraform
 Github action that validates and plans terraform and provides
 a nice output.
@@ -53,4 +52,33 @@ terraform 1.4.2
 ## Inputs
 `path` (optional): This is the path where the terraform configuration lives
 `terraform-token` (optional): This is the token to communicate with terraform cloud if you are using it
+
+## Auto-merge
+If you would like to also automatically merge the PR when it has been applied you can do the following:
+
+```yaml
+name: pr_apply
+
+on:
+  pull_request:
+    types: [ labeled ]
+
+jobs:
+  TerraformApply:
+    if: ${{ github.event.label.name == 'tfc-apply' }}
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+      pull-requests: write
+    strategy:
+      fail-fast: false
+      matrix:
+        folder:
+          - root
+    steps:
+      - uses: actions/checkout@v3
+      - uses: sontek/apply-terraform@v1.1
+        with:
+          path: ${{ matrix.folder }}
+          terraform-token: ${{ secrets.TFE_TOKEN }}
 ```
